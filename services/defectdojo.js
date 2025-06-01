@@ -10,7 +10,7 @@ const defectDojoClient = axios.create({
 });
 
 // Fetch active vulnerabilities
-const getActiveFindings = async () => {
+export async function getActiveFindings() {
   let findings = [];
   let nextUrl = '/findings/?active=true';
   
@@ -29,4 +29,15 @@ const getActiveFindings = async () => {
   }
 };
 
-module.exports = { getActiveFindings };
+export async function createEngagement(name, startDate = new Date()) {
+  const payload = {
+    name,
+    product: "productId", // Replace with actual product ID
+    target_start: startDate.toISOString().split('T')[0],
+    target_end: startDate.toISOString().split('T')[0],
+    status: 'In Progress',
+  };
+
+  const res = await dojoAPI.post('/engagements/', payload);
+  return res.data.id;
+}
