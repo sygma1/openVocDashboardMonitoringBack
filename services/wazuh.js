@@ -9,66 +9,28 @@ const ELASTIC_URL = process.env.ELASTICSEARCH_URL;
 const ELASTIC_USER = process.env.ELASTICSEARCH_USER;
 const ELASTIC_PASSWORD = process.env.ELASTICSEARCH_PASSWORD;
 
-const setupWazuhWebSocket = (wss) => {
-  let lastSeenTimestamp = 0;
+async function fetchRecentWazuhAlertsFromMongo() {
+  try {
+    const alerts = await Alert.find()
+      .sort({ timestamp: -1 })
+      .limit(10)
+      .lean(); // Use lean() to get plain JavaScript objects
 
-  setInterval(async () => {
-    try {
-      const response = await axios.post(
-        `${ELASTIC_URL}/wazuh-alerts-*/_search`,
-        {
-          size: 10,
-          sort: [{ "@timestamp": { order: "desc" } }]
-        },
-        {
-          auth: {
-            username: ELASTIC_USER,
-            password: ELASTIC_PASSWORD
-          },
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          httpsAgent: new https.Agent({ rejectUnauthorized: false })
-        }
-      );
+    return alerts.map((alert) => ({
+      ruleId: alert.ruleId,
+      description: 'No description', // Placeholder; can be added to schema later
+      severity:
+        alert.severity <= 5 ? 'low' :
+        alert.severity <= 10 ? 'medium' : 'high',
+      agentName: 'unknown', // Placeholder; add to schema if needed
+      timestamp: alert.timestamp
+    }));
+  } catch (error) {
+    console.error('Error fetching alerts from MongoDB:', error.message);
+    return [];
+  }
+}
 
-      const hits = response.data.hits.hits;
-
-      for (const hit of hits.reverse()) {
-        const alert = hit._source;
-        const ts = new Date(alert['@timestamp']).getTime();
-
-        if (ts > lastSeenTimestamp) {
-          lastSeenTimestamp = ts;
-
-          const filteredAlert = {
-            ruleId: alert.rule?.id,
-            description: alert.rule?.description || 'No description',
-            severity:
-              alert.rule?.level <= 5 ? 'low' :
-              alert.rule?.level <= 10 ? 'medium' : 'high',
-            agentName: alert.agent?.name || 'unknown',
-            timestamp: new Date(alert['@timestamp'])
-          };
-
-          // Don't save to MongoDB, just send to clients
-          wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify(filteredAlert));
-            }
-          });
-
-          wss.clients.forEach((client) => {
-            if (client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify(newAlert));
-            }
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching alerts from Elasticsearch:', error.message);
-    }
-  }, 10000); // every 10 seconds
+module.exports = {
+  fetchRecentWazuhAlertsFromMongo
 };
-
-module.exports = { setupWazuhWebSocket };

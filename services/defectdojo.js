@@ -1,33 +1,18 @@
 //services/defectdojo.js
+import Vulnerability from '../models/Vulnerability.js';
 
-const axios = require('axios');
-
-const defectDojoClient = axios.create({
-  baseURL: process.env.DEFECT_DOJO_URL,
-  headers: {
-    Authorization: `Token ${process.env.DEFECT_DOJO_API_KEY}`,
-  },
-});
-
-// Fetch active vulnerabilities
-export async function getActiveFindings() {
-  let findings = [];
-  let nextUrl = '/findings/?active=true';
-  
+/**
+ * Fetch all vulnerabilities (active and inactive) from MongoDB.
+ */
+export async function getAllFindings() {
   try {
-    while (nextUrl) {
-      const response = await defectDojoClient.get(nextUrl);
-      findings = findings.concat(response.data.results);
-      nextUrl = response.data.next
-        ? response.data.next.replace(process.env.DEFECT_DOJO_URL, '')
-        : null;
-    }
+    const findings = await Vulnerability.find().lean();
     return findings;
   } catch (error) {
-    console.error('DefectDojo API error:', error.message);
+    console.error('MongoDB error while fetching all vulnerabilities:', error.message);
     return [];
   }
-};
+}
 
 export async function createEngagement(name, startDate = new Date()) {
   const payload = {
